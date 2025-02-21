@@ -19,7 +19,7 @@ oldestOS="15.5"
 previousPreviousOS="16.4"
 previousOS="17.5"
 currentOSWorkaround="18.1"
-currentOS="18.2"
+currentOS="18.3.1"
 
 runtimeString() { echo "com.apple.CoreSimulator.SimRuntime.iOS-${1//./-}"; }
 
@@ -49,6 +49,14 @@ debug_print() {
     fi
 }
 
+install_certificate() {
+    if [[ -e "$PROXYING_CERTIFICATE" ]]; then
+        xcrun simctl boot $1
+        xcrun simctl keychain $1 add-root-cert $PROXYING_CERTIFICATE
+        xcrun simctl shutdown $1
+    fi
+}
+
 create_device() {
     debug_print $0
 
@@ -62,12 +70,9 @@ create_device() {
     do 
         local device="${devices[$i]}"
         debug_print "Creating '$device' with '$runtime'"
-
         device_id=$(xcrun simctl create "$device" "$device" "$runtime")
         defaults write com.apple.dt.Xcode DVTDeviceVisibilityPreferences -dict-add $device_id -int 1
-        xcrun simctl boot $device_id
-        xcrun simctl keychain $device_id add-root-cert ~/Developer/carsales/charles-ssl-proxying-certificate.pem
-        xcrun simctl shutdown $device_id
+        install_certificate $device_id
     done
 }
 
