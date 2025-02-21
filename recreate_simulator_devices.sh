@@ -154,6 +154,7 @@ print_help() {
     local allSupportedOSVersions=($oldestOS $previousPreviousOS $previousOS $currentOSWorkaround $currentOS)
 
     echo "\nUsage: recreate_simulator_devices [[-o] [-2] [-1] [-0 min|all] [-w min|all]] | [-a min|all]"
+    echo "\nSet \$PROXYING_CERTIFICATE to the location of the proxy root certificate if you want to automatically install one to each simulator"
     echo
     echo "Options:"
     echo   "  -h        Show this help message and exit"
