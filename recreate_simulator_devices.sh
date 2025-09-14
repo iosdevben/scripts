@@ -19,7 +19,7 @@ oldestOS="15.5"
 previousPreviousOS="16.4"
 previousOS="17.5"
 currentOSWorkaround="18.1"
-currentOS="18.3.1"
+currentOS="18.6"
 
 runtimeString() { echo "com.apple.CoreSimulator.SimRuntime.iOS-${1//./-}"; }
 
