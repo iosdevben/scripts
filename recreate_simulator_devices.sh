@@ -1,12 +1,14 @@
 #!/bin/zsh
 
-iPhoneOldest="iPhone SE (3rd generation)"
-iPhonePreviousPrevious="iPhone 14 Pro"
-iPhonePreviousPreviousPlus="iPhone 14 Pro Max"
+iPhoneOldest="iPhone 14 Pro"
 iPhonePrevious="iPhone 15 Pro"
-iPhonePreviousPlus="iPhone 15 Pro Max"
 iPhoneCurrent="iPhone 16 Pro"
+iPhoneNext="iPhone 17 Pro"
+
+iPhoneOldestLargest="iPhone 14 Pro Max"
+iPhonePreviousLargest="iPhone 15 Pro Max"
 iPhoneCurrentLargest="iPhone 16 Pro Max"
+iPhoneNextLargest="iPhone 17 Pro Max"
 
 iPadOldest="iPad mini 4"
 iPadPreviousPrevious="iPad mini (5th generation)"
@@ -14,35 +16,31 @@ iPadPrevious="iPad Air (5th generation)"
 iPadMiniCurrent="iPad mini (A17 Pro)"
 iPadCurrent="iPad Air 11-inch (M2)"
 iPadCurrentLargest="iPad Air 13-inch (M2)"
+iPadNext="iPad Air 11-inch (M2)"
+iPadNextLargest="iPad Air 13-inch (M2)"
 
-oldestOS="15.5"
-previousPreviousOS="16.4"
+oldestOS="16.4"
 previousOS="17.5"
-currentOSWorkaround="18.1"
-currentOS="18.6"
+currentOS="18.4"
+nextOS="26.1"
 
 runtimeString() { echo "com.apple.CoreSimulator.SimRuntime.iOS-${1//./-}"; }
 
-# eg 15.5
 oldestRuntime="$(runtimeString $oldestOS)"
-# eg 16.4
-previousPreviousRuntime="$(runtimeString $previousPreviousOS)"
-# eg 17.6
 previousRuntime="$(runtimeString $previousOS)"
-# eg 18.1
-currentRuntimeWorkaround="$(runtimeString $currentOSWorkaround)"
-# eg 18.2
 currentRuntime="$(runtimeString $currentOS)"
+nextRuntime="$(runtimeString $nextOS)"
 
 oldestDevices=( $iPhoneOldest $iPadOldest )
-previousPreviousDevices=( $iPhonePreviousPrevious $iPadPreviousPrevious )
 previousDevices=( $iPhonePrevious $iPadPrevious )
 currentDevices=( $iPhoneCurrent $iPhoneCurrentLargest $iPadMiniCurrent $iPadCurrent $iPadCurrentLargest )
 currentMinimumDevices=( $iPhoneCurrent $iPadCurrent )
-allMinimumDevices=($oldestDevices $previousPreviousDevices $previousDevices $currentMinimumDevices)
-allDevices=($oldestDevices $previousPreviousDevices $previousDevices $currentDevices)
+nextDevices=( $iPhoneNext $iPhoneNextLargest $iPadNext $iPadNextLargest )
+nextMinimumDevices=( $iPhoneNext $iPadNext )
+allMinimumDevices=($oldestDevices $previousDevices $currentMinimumDevices $nextMinimumDevices)
+allDevices=($oldestDevices $previousDevices $currentDevices $nextDevices)
 
-DEBUG_ENABLED=0
+DEBUG_ENABLED=1
 debug_print() {
     if [[ $DEBUG_ENABLED == 1 ]]; then
         echo $1
@@ -100,16 +98,6 @@ create_previous_devices() {
     create_device "${previousDevices[@]}" "$previousRuntime"
 }
 
-create_current_workaround_devices() {
-    debug_print $0
-
-    if [[ "$1" == "min" ]]; then
-        create_device "${currentMinimumDevices[@]}" "$currentRuntimeWorkaround"
-    else
-        create_device "${currentDevices[@]}" "$currentRuntimeWorkaround"
-    fi
-}
-
 create_current_devices() {
     debug_print $0
 
@@ -117,6 +105,16 @@ create_current_devices() {
         create_device "${currentMinimumDevices[@]}" "$currentRuntime"
     else
         create_device "${currentDevices[@]}" "$currentRuntime"
+    fi
+}
+
+create_next_devices() {
+    debug_print $0
+
+    if [[ "$1" == "min" ]]; then
+        create_device "${nextMinimumDevices[@]}" "$nextRuntime"
+    else
+        create_device "${nextDevices[@]}" "$nextRuntime"
     fi
 }
 
@@ -129,9 +127,9 @@ create_devices() {
         o) create_oldest_devices;;
         2) create_previous_previous_devices;;
         1) create_previous_devices;;
-        w) create_current_workaround_devices $scope;;
         0) create_current_devices $scope;;
-        a) create_oldest_devices; create_previous_previous_devices; create_previous_devices; create_current_workaround_devices $scope; create_current_devices $scope;;
+        n) create_next_devices $scope;;
+        a) create_oldest_devices; create_previous_previous_devices; create_previous_devices; create_current_devices $scope;;
         *) echo "$1 unrecognised"; exit 1;;
     esac
 }
@@ -151,9 +149,9 @@ announce_completion() {
 print_help() {
     debug_print $0
 
-    local allSupportedOSVersions=($oldestOS $previousPreviousOS $previousOS $currentOSWorkaround $currentOS)
+    local allSupportedOSVersions=($oldestOS $previousOS $currentOS $nextOS)
 
-    echo "\nUsage: recreate_simulator_devices [[-o] [-2] [-1] [-0 min|all] [-w min|all]] | [-a min|all]"
+    echo "\nUsage: recreate_simulator_devices [[-o] [-2] [-1] [-0 min|all] [-n min|all] [-w min|all]] | [-a min|all]"
     echo "\nSet \$PROXYING_CERTIFICATE to the location of the proxy root certificate if you want to automatically install one to each simulator"
     echo
     echo "Options:"
@@ -162,12 +160,11 @@ print_help() {
     echo   "  -D        Enable debug messages"
     echo   "  -d        Delete all devices at the start"
     printf "  -o        Installs $oldestOS on %s\n" "${(j/, /)oldestDevices}"
-    printf "  -2        Installs $previousPreviousOS on %s\n" "${(j/, /)previousPreviousDevices}"
     printf "  -1        Installs $previousOS on %s\n" "${(j/, /)previousDevices}"
-    printf "  -w min    Installs $currentOSWorkaround on %s\n" "${(j/, /)currentMinimumDevices}"
-    printf "  -w all    Installs $currentOSWorkaround on %s\n" "${(j/, /)currentDevices}"
     printf "  -0 min    Installs $currentOS on %s\n" "${(j/, /)currentMinimumDevices}"
     printf "  -0 all    Installs $currentOS on %s\n" "${(j/, /)currentDevices}"
+    printf "  -n min    Installs $nextOS on %s\n" "${(j/, /)nextMinimumDevices}"
+    printf "  -n all    Installs $nextOS on %s\n" "${(j/, /)nextDevices}"
     printf "  -a min    Installs %s on %s\n" "${(j/, /)allSupportedOSVersions}" "${(j/, /)allMinimumDevices}"
     printf "  -a max    Installs %s on %s\n" "${(j/, /)allSupportedOSVersions}" "${(j/, /)allMaximumDevices}"
 }
@@ -189,7 +186,7 @@ print_help_if_no_arguments() {
 print_help_if_no_arguments $1
 
 reordered=()
-for option in -D -h -l -d -a -o -2 -1 -w -0; do
+for option in -D -h -l -d -a -o -2 -1 -w -0 -n; do
     for arg in "$@"; do
         [[ "$arg" == "$option" || "$arg" == "$option"* ]] && reordered+="$arg"
     done
@@ -199,7 +196,7 @@ for arg in "$@"; do
     [[ "$arg" != -* ]] && reordered+="$arg"
 done
 
-while getopts ":lDdo21hw:0:a:" argument ${reordered[@]}; do
+while getopts ":lDdo21hw:0:n:a:" argument ${reordered[@]}; do
     case "$argument" in
             h) print_help; exit;;
             D) DEBUG_ENABLED=1;;
@@ -211,6 +208,7 @@ while getopts ":lDdo21hw:0:a:" argument ${reordered[@]}; do
             1) create_devices $argument;;
             w) create_devices $argument $OPTARG;;
             0) create_devices $argument $OPTARG;;
+            n) create_devices $argument;;
             :) echo "\nError: Option -$OPTARG must be followed by min or max." >&2; print_help; exit 1;;
             ?) echo "\nError: unrecognised argument: -$OPTARG"; print_help; exit 1;;
             *) echo "WTF";;
