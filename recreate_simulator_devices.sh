@@ -10,8 +10,8 @@ iPhonePreviousLargest="iPhone 15 Pro Max"
 iPhoneCurrentLargest="iPhone 16 Pro Max"
 iPhoneNextLargest="iPhone 17 Pro Max"
 
-iPadOldest="iPad mini 4"
-iPadPreviousPrevious="iPad mini (5th generation)"
+iPadOldest="iPad Air (5th generation)"
+iPadPreviousPrevious="iPad Air (5th generation)"
 iPadPrevious="iPad Air (5th generation)"
 iPadMiniCurrent="iPad mini (A17 Pro)"
 iPadCurrent="iPad Air 11-inch (M2)"
@@ -22,7 +22,7 @@ iPadNextLargest="iPad Air 13-inch (M2)"
 oldestOS="16.4"
 previousOS="17.5"
 currentOS="18.4"
-nextOS="26.1"
+nextOS="26.2"
 
 runtimeString() { echo "com.apple.CoreSimulator.SimRuntime.iOS-${1//./-}"; }
 
@@ -40,7 +40,7 @@ nextMinimumDevices=( $iPhoneNext $iPadNext )
 allMinimumDevices=($oldestDevices $previousDevices $currentMinimumDevices $nextMinimumDevices)
 allDevices=($oldestDevices $previousDevices $currentDevices $nextDevices)
 
-DEBUG_ENABLED=1
+DEBUG_ENABLED=0
 debug_print() {
     if [[ $DEBUG_ENABLED == 1 ]]; then
         echo $1
@@ -78,6 +78,28 @@ delete_all_devices() {
     debug_print $0
 
     xcrun simctl delete all
+}
+
+delete_newest_devices() {
+    debug_print $0
+
+    for device in "${nextDevices[@]}"; do
+        debug_print "$nextRuntime"
+        xcrun simctl list devices "$device" | grep -F "$device" | grep -oE '[A-F0-9]{8}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{12}' | while IFS= read -r udid; do
+            debug_print "Deleting '$device' with udid '$udid'"
+            xcrun simctl delete "$udid"
+        done
+    done
+}
+
+delete_devices() {
+    debug_print $0
+
+    case $1 in
+        n) delete_newest_devices;;
+        all) delete_all_devices;;
+        *) echo "$1 unrecognised"; exit 1;;
+    esac
 }
 
 create_oldest_devices() {
@@ -129,7 +151,7 @@ create_devices() {
         1) create_previous_devices;;
         0) create_current_devices $scope;;
         n) create_next_devices $scope;;
-        a) create_oldest_devices; create_previous_previous_devices; create_previous_devices; create_current_devices $scope;;
+        a) create_oldest_devices; create_previous_previous_devices; create_previous_devices; create_current_devices; create_next_devices $scope;;
         *) echo "$1 unrecognised"; exit 1;;
     esac
 }
@@ -158,7 +180,8 @@ print_help() {
     echo   "  -h        Show this help message and exit"
     echo   "  -l        List devices"
     echo   "  -D        Enable debug messages"
-    echo   "  -d        Delete all devices at the start"
+    printf "  -d n      Deletes $nextOS devices: %s\n" "${(j/, /)nextDevices}"
+    echo   "  -d all    Deletes all devices"
     printf "  -o        Installs $oldestOS on %s\n" "${(j/, /)oldestDevices}"
     printf "  -1        Installs $previousOS on %s\n" "${(j/, /)previousDevices}"
     printf "  -0 min    Installs $currentOS on %s\n" "${(j/, /)currentMinimumDevices}"
@@ -166,7 +189,7 @@ print_help() {
     printf "  -n min    Installs $nextOS on %s\n" "${(j/, /)nextMinimumDevices}"
     printf "  -n all    Installs $nextOS on %s\n" "${(j/, /)nextDevices}"
     printf "  -a min    Installs %s on %s\n" "${(j/, /)allSupportedOSVersions}" "${(j/, /)allMinimumDevices}"
-    printf "  -a max    Installs %s on %s\n" "${(j/, /)allSupportedOSVersions}" "${(j/, /)allMaximumDevices}"
+    printf "  -a max    Installs %s on %s\n" "${(j/, /)allSupportedOSVersions}" "${(j/, /)allDevices}"
 }
 
 print_help_if_no_arguments() {
@@ -196,12 +219,12 @@ for arg in "$@"; do
     [[ "$arg" != -* ]] && reordered+="$arg"
 done
 
-while getopts ":lDdo21hw:0:n:a:" argument ${reordered[@]}; do
+while getopts ":lDd:o21hw:0:n:a:" argument ${reordered[@]}; do
     case "$argument" in
             h) print_help; exit;;
             D) DEBUG_ENABLED=1;;
             l) list_devices; exit;;
-            d) delete_all_devices;;
+            d) delete_devices $OPTARG;;
             a) create_devices $argument $OPTARG; exit;;
             o) create_devices $argument;;
             2) create_devices $argument;;
@@ -209,7 +232,7 @@ while getopts ":lDdo21hw:0:n:a:" argument ${reordered[@]}; do
             w) create_devices $argument $OPTARG;;
             0) create_devices $argument $OPTARG;;
             n) create_devices $argument;;
-            :) echo "\nError: Option -$OPTARG must be followed by min or max." >&2; print_help; exit 1;;
+            :) echo "\nError: Option -$OPTARG requires an argument." >&2; print_help; exit 1;;
             ?) echo "\nError: unrecognised argument: -$OPTARG"; print_help; exit 1;;
             *) echo "WTF";;
     esac
