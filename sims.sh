@@ -1,6 +1,7 @@
 #!/bin/zsh
 
-iPhoneOldest="iPhone 14 Pro"
+iPhoneOldest="iPhone 13 Pro"
+iPhonePreviousPrevious="iPhone 14 Pro"
 iPhonePrevious="iPhone 15 Pro"
 iPhoneCurrent="iPhone 16 Pro"
 iPhoneNext="iPhone 17 Pro"
@@ -11,18 +12,18 @@ iPhoneCurrentLargest="iPhone 16 Pro Max"
 iPhoneNextLargest="iPhone 17 Pro Max"
 
 iPadOldest="iPad Air (5th generation)"
-iPadPreviousPrevious="iPad Air (5th generation)"
+iPadPreviousPrevious="iPad Air (4th generation)"
 iPadPrevious="iPad Air (5th generation)"
 iPadMiniCurrent="iPad mini (A17 Pro)"
 iPadCurrent="iPad Air 11-inch (M2)"
 iPadCurrentLargest="iPad Air 13-inch (M2)"
-iPadNext="iPad Air 11-inch (M2)"
-iPadNextLargest="iPad Air 13-inch (M2)"
+iPadNext="iPad Air 11-inch (M4)"
+iPadNextLargest="iPad Air 13-inch (M4)"
 
 oldestOS="16.4"
 previousOS="17.5"
-currentOS="18.4"
-nextOS="26.2"
+currentOS="18.6"
+nextOS="26.4"
 
 runtimeString() { echo "com.apple.CoreSimulator.SimRuntime.iOS-${1//./-}"; }
 
@@ -32,6 +33,7 @@ currentRuntime="$(runtimeString $currentOS)"
 nextRuntime="$(runtimeString $nextOS)"
 
 oldestDevices=( $iPhoneOldest $iPadOldest )
+previousPreviousDevices=( $iPhonePreviousPrevious $iPadPreviousPrevious )
 previousDevices=( $iPhonePrevious $iPadPrevious )
 currentDevices=( $iPhoneCurrent $iPhoneCurrentLargest $iPadMiniCurrent $iPadCurrent $iPadCurrentLargest )
 currentMinimumDevices=( $iPhoneCurrent $iPadCurrent )
