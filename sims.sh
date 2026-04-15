@@ -43,6 +43,7 @@ allMinimumDevices=($oldestDevices $previousDevices $currentMinimumDevices $nextM
 allDevices=($oldestDevices $previousDevices $currentDevices $nextDevices)
 
 DEBUG_ENABLED=0
+SUFFIX=""
 debug_print() {
     if [[ $DEBUG_ENABLED == 1 ]]; then
         echo $1
@@ -69,26 +70,101 @@ create_device() {
     for (( i=1; i<=$device_count; i++ ))
     do 
         local device="${devices[$i]}"
-        debug_print "Creating '$device' with '$runtime'"
-        device_id=$(xcrun simctl create "$device" "$device" "$runtime")
+        local simulator_name="$device"
+        if [[ -n "$SUFFIX" ]]; then
+            simulator_name="$device - $SUFFIX"
+        fi
+
+        debug_print "Creating '$simulator_name' with '$runtime'"
+        device_id=$(xcrun simctl create "$simulator_name" "$device" "$runtime")
         defaults write com.apple.dt.Xcode DVTDeviceVisibilityPreferences -dict-add $device_id -int 1
         install_certificate $device_id
     done
-}
-
-delete_all_devices() {
-    debug_print $0
-
-    xcrun simctl delete all
 }
 
 delete_newest_devices() {
     debug_print $0
 
     for device in "${nextDevices[@]}"; do
+        local matched_device_name="$device"
+        if [[ -n "$SUFFIX" ]]; then
+            matched_device_name="$device - $SUFFIX"
+        fi
+
         debug_print "$nextRuntime"
+        xcrun simctl list devices "$device" | grep -F "$matched_device_name" | grep -oE '[A-F0-9]{8}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{12}' | while IFS= read -r udid; do
+            debug_print "Deleting '$matched_device_name' with udid '$udid'"
+            xcrun simctl delete "$udid"
+        done
+    done
+}
+
+delete_current_devices() {
+    debug_print $0
+
+    for device in "${currentDevices[@]}"; do
+        local matched_device_name="$device"
+        if [[ -n "$SUFFIX" ]]; then
+            matched_device_name="$device - $SUFFIX"
+        fi
+
+        debug_print "$currentRuntime"
+        xcrun simctl list devices "$device" | grep -F "$matched_device_name" | grep -oE '[A-F0-9]{8}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{12}' | while IFS= read -r udid; do
+            debug_print "Deleting '$matched_device_name' with udid '$udid'"
+            xcrun simctl delete "$udid"
+        done
+    done
+}
+
+delete_previous_devices() {
+    debug_print $0
+
+    for device in "${previousDevices[@]}"; do
+        debug_print "$previousRuntime"
         xcrun simctl list devices "$device" | grep -F "$device" | grep -oE '[A-F0-9]{8}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{12}' | while IFS= read -r udid; do
             debug_print "Deleting '$device' with udid '$udid'"
+            xcrun simctl delete "$udid"
+        done
+    done
+}
+
+delete_previous_previous_devices() {
+    debug_print $0
+
+    for device in "${previousPreviousDevices[@]}"; do
+        debug_print "$previousPreviousRuntime"
+        xcrun simctl list devices "$device" | grep -F "$device" | grep -oE '[A-F0-9]{8}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{12}' | while IFS= read -r udid; do
+            debug_print "Deleting '$device' with udid '$udid'"
+            xcrun simctl delete "$udid"
+        done
+    done
+}
+
+delete_oldest_devices() {
+    debug_print $0
+
+    for device in "${oldestDevices[@]}"; do
+        debug_print "$oldestRuntime"
+        xcrun simctl list devices "$device" | grep -F "$device" | grep -oE '[A-F0-9]{8}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{12}' | while IFS= read -r udid; do
+            debug_print "Deleting '$device' with udid '$udid'"
+            xcrun simctl delete "$udid"
+        done
+    done
+}
+
+delete_all_devices() {
+    debug_print $0
+
+    if [[ -z "$SUFFIX" ]]; then
+        xcrun simctl delete all
+        return
+    fi
+
+    local devices_for_all=("${oldestDevices[@]}" "${previousPreviousDevices[@]}" "${previousDevices[@]}" "${currentDevices[@]}" "${nextDevices[@]}")
+    for device in "${devices_for_all[@]}"; do
+        local matched_device_name="$device - $SUFFIX"
+        xcrun simctl list devices "$device" | grep -F "$matched_device_name" | grep -oE '[A-F0-9]{8}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{12}' | while IFS= read -r udid; do
+            debug_print "Deleting '$matched_device_name' with udid '$udid'"
             xcrun simctl delete "$udid"
         done
     done
@@ -99,6 +175,10 @@ delete_devices() {
 
     case $1 in
         n) delete_newest_devices;;
+        0) delete_current_devices;;
+        -1) delete_previous_devices;;
+        -2) delete_previous_previous_devices;;
+        o) delete_oldest_devices;;
         all) delete_all_devices;;
         *) echo "$1 unrecognised"; exit 1;;
     esac
@@ -183,7 +263,11 @@ print_help() {
     echo   "  -l        List devices"
     echo   "  -D        Enable debug messages"
     printf "  -d n      Deletes $nextOS devices: %s\n" "${(j/, /)nextDevices}"
-    echo   "  -d all    Deletes all devices"
+    printf "  -d 0      Deletes $currentOS devices: %s\n" "${(j/, /)currentDevices}"
+    printf "  -d -1     Deletes $previousOS devices: %s\n" "${(j/, /)previousDevices}"
+    printf "  -d -2     Deletes $previousPreviousOS devices: %s\n" "${(j/, /)previousPreviousDevices}"
+    printf "  -d o     Deletes $oldestOS devices: %s\n" "${(j/, /)oldestDevices}"
+    echo   "  -d all    Deletes all devices (or only branch-suffixed devices with -branch)"
     printf "  -o        Installs $oldestOS on %s\n" "${(j/, /)oldestDevices}"
     printf "  -1        Installs $previousOS on %s\n" "${(j/, /)previousDevices}"
     printf "  -0 min    Installs $currentOS on %s\n" "${(j/, /)currentMinimumDevices}"
@@ -192,6 +276,7 @@ print_help() {
     printf "  -n all    Installs $nextOS on %s\n" "${(j/, /)nextDevices}"
     printf "  -a min    Installs %s on %s\n" "${(j/, /)allSupportedOSVersions}" "${(j/, /)allMinimumDevices}"
     printf "  -a max    Installs %s on %s\n" "${(j/, /)allSupportedOSVersions}" "${(j/, /)allDevices}"
+    echo   "  -branch s Appends ' - s' to created simulator names (not supported with -a)"
 }
 
 print_help_if_no_arguments() {
@@ -210,18 +295,44 @@ print_help_if_no_arguments() {
 
 print_help_if_no_arguments $1
 
-reordered=()
-for option in -D -h -l -d -a -o -2 -1 -w -0 -n; do
-    for arg in "$@"; do
-        [[ "$arg" == "$option" || "$arg" == "$option"* ]] && reordered+="$arg"
+processed_args=()
+for (( i=1; i<=$#; i++ )); do
+    current_arg="${@[i]}"
+
+    if [[ "$current_arg" == "-branch" ]]; then
+        next_index=$((i + 1))
+        if (( next_index > $# )); then
+            echo "\nError: Option -branch requires an argument." >&2
+            print_help
+            exit 1
+        fi
+
+        next_arg="${@[next_index]}"
+        if [[ "$next_arg" == -* ]]; then
+            echo "\nError: Option -branch requires a non-option argument." >&2
+            print_help
+            exit 1
+        fi
+
+        SUFFIX="$next_arg"
+        i=$next_index
+        continue
+    fi
+
+    processed_args+=("$current_arg")
+done
+
+if [[ -n "$SUFFIX" ]]; then
+    for arg in "${processed_args[@]}"; do
+        if [[ "$arg" == "-a" ]]; then
+            echo "\nError: -branch cannot be used with -a." >&2
+            print_help
+            exit 1
+        fi
     done
-done
+fi
 
-for arg in "$@"; do
-    [[ "$arg" != -* ]] && reordered+="$arg"
-done
-
-while getopts ":lDd:o21hw:0:n:a:" argument ${reordered[@]}; do
+while getopts ":lDd:o21h0:n:a:" argument "${processed_args[@]}"; do
     case "$argument" in
             h) print_help; exit;;
             D) DEBUG_ENABLED=1;;
@@ -231,9 +342,8 @@ while getopts ":lDd:o21hw:0:n:a:" argument ${reordered[@]}; do
             o) create_devices $argument;;
             2) create_devices $argument;;
             1) create_devices $argument;;
-            w) create_devices $argument $OPTARG;;
             0) create_devices $argument $OPTARG;;
-            n) create_devices $argument;;
+            n) create_devices $argument $OPTARG;;
             :) echo "\nError: Option -$OPTARG requires an argument." >&2; print_help; exit 1;;
             ?) echo "\nError: unrecognised argument: -$OPTARG"; print_help; exit 1;;
             *) echo "WTF";;
