@@ -2,28 +2,28 @@
 
 iPhoneOldest="iPhone 13 Pro"
 iPhonePreviousPrevious="iPhone 14 Pro"
-iPhonePrevious="iPhone 15 Pro"
-iPhoneCurrent="iPhone 16 Pro"
-iPhoneNext="iPhone 17 Pro"
+iPhonePrevious="iPhone 16 Pro"
+iPhoneCurrent="iPhone 17 Pro"
+iPhoneNext="iPhone 18 Pro"
 
 iPhoneOldestLargest="iPhone 14 Pro Max"
-iPhonePreviousLargest="iPhone 15 Pro Max"
-iPhoneCurrentLargest="iPhone 16 Pro Max"
-iPhoneNextLargest="iPhone 17 Pro Max"
+iPhonePreviousLargest="iPhone 16 Pro Max"
+iPhoneCurrentLargest="iPhone 17 Pro Max"
+iPhoneNextLargest="iPhone 18 Pro Max"
 
 iPadOldest="iPad Air (5th generation)"
-iPadPreviousPrevious="iPad Air (4th generation)"
-iPadPrevious="iPad Air (5th generation)"
+iPadPreviousPrevious="iPad Air 11-inch (M3)"
+iPadPrevious="iPad Air 11-inch (M3)"
 iPadMiniCurrent="iPad mini (A17 Pro)"
-iPadCurrent="iPad Air 11-inch (M2)"
-iPadCurrentLargest="iPad Air 13-inch (M2)"
-iPadNext="iPad Air 11-inch (M4)"
-iPadNextLargest="iPad Air 13-inch (M4)"
+iPadCurrent="iPad Air 11-inch (M3)"
+iPadCurrentLargest="iPad Air 13-inch (M3)"
+iPadNext="iPad Air 11-inch (M3)"
+iPadNextLargest="iPad Air 13-inch (M3)"
 
-oldestOS="16.4"
-previousOS="17.5"
-currentOS="18.6"
-nextOS="26.4"
+oldestOS="17.5"
+previousOS="18.6"
+currentOS="26.2"
+nextOS="27.0"
 
 runtimeString() { echo "com.apple.CoreSimulator.SimRuntime.iOS-${1//./-}"; }
 
@@ -44,9 +44,23 @@ allDevices=($oldestDevices $previousDevices $currentDevices $nextDevices)
 
 DEBUG_ENABLED=0
 SUFFIX=""
+FORCE_ALL=0
 debug_print() {
     if [[ $DEBUG_ENABLED == 1 ]]; then
         echo $1
+    fi
+}
+
+runtime_exists() {
+    xcrun simctl list runtimes | grep -Fq "$1"
+}
+
+require_runtime() {
+    local runtime="$1"
+
+    if ! runtime_exists "$runtime"; then
+        echo "Error: runtime '$runtime' could not be found." >&2
+        exit 1
     fi
 }
 
@@ -65,6 +79,8 @@ create_device() {
     let device_count=${#parameters[@]}-1
     local runtime=$parameters[-1]
     local devices=("${parameters[@]:0:$device_count}")
+
+    require_runtime "$runtime"
 
     # arrays start at 1 in zsh
     for (( i=1; i<=$device_count; i++ ))
@@ -226,14 +242,18 @@ create_next_devices() {
 create_devices() {
     debug_print $0
 
-    scope=$2
+    local scope="min"
+    if [[ "$FORCE_ALL" == 1 ]]; then
+        scope="all"
+    fi
+
     case $1 in
         o) create_oldest_devices;;
         2) create_previous_previous_devices;;
         1) create_previous_devices;;
         0) create_current_devices $scope;;
         n) create_next_devices $scope;;
-        a) create_oldest_devices; create_previous_previous_devices; create_previous_devices; create_current_devices; create_next_devices $scope;;
+        a) create_oldest_devices; create_previous_previous_devices; create_previous_devices; create_current_devices $scope; create_next_devices $scope;;
         *) echo "$1 unrecognised"; exit 1;;
     esac
 }
@@ -255,7 +275,7 @@ print_help() {
 
     local allSupportedOSVersions=($oldestOS $previousOS $currentOS $nextOS)
 
-    echo "\nUsage: recreate_simulator_devices [[-o] [-2] [-1] [-0 min|all] [-n min|all] | [-a min|all]"
+    echo "\nUsage: sims.sh [[-o] [-2] [-1] [-0] [-n] | [-a]] [--all]"
     echo "\nSet \$PROXYING_CERTIFICATE to the location of the proxy root certificate if you want to automatically install one to each simulator"
     echo
     echo "Options:"
@@ -267,16 +287,14 @@ print_help() {
     printf "  -d -1     Deletes $previousOS devices: %s\n" "${(j/, /)previousDevices}"
     printf "  -d -2     Deletes $previousPreviousOS devices: %s\n" "${(j/, /)previousPreviousDevices}"
     printf "  -d o     Deletes $oldestOS devices: %s\n" "${(j/, /)oldestDevices}"
-    echo   "  -d all    Deletes all devices (or only branch-suffixed devices with -branch)"
+    echo   "  -d all    Deletes all devices (or only suffix-suffixed devices with -suffix)"
     printf "  -o        Installs $oldestOS on %s\n" "${(j/, /)oldestDevices}"
     printf "  -1        Installs $previousOS on %s\n" "${(j/, /)previousDevices}"
-    printf "  -0 min    Installs $currentOS on %s\n" "${(j/, /)currentMinimumDevices}"
-    printf "  -0 all    Installs $currentOS on %s\n" "${(j/, /)currentDevices}"
-    printf "  -n min    Installs $nextOS on %s\n" "${(j/, /)nextMinimumDevices}"
-    printf "  -n all    Installs $nextOS on %s\n" "${(j/, /)nextDevices}"
-    printf "  -a min    Installs %s on %s\n" "${(j/, /)allSupportedOSVersions}" "${(j/, /)allMinimumDevices}"
-    printf "  -a max    Installs %s on %s\n" "${(j/, /)allSupportedOSVersions}" "${(j/, /)allDevices}"
-    echo   "  -branch s Appends ' - s' to created simulator names (not supported with -a)"
+    printf "  -0        Installs $currentOS minimum on %s\n" "${(j/, /)currentMinimumDevices}"
+    printf "  -n        Installs $nextOS minimum on %s\n" "${(j/, /)nextMinimumDevices}"
+    printf "  -a        Installs %s on minimum set %s\n" "${(j/, /)allSupportedOSVersions}" "${(j/, /)allMinimumDevices}"
+    echo   "  --all     For -0, -n, and -a, install full device sets (same behavior as old 'all'/'max' arguments)"
+    echo   "  -suffix s Appends ' - s' to created simulator names (not supported with -a)"
 }
 
 print_help_if_no_arguments() {
@@ -299,17 +317,17 @@ processed_args=()
 for (( i=1; i<=$#; i++ )); do
     current_arg="${@[i]}"
 
-    if [[ "$current_arg" == "-branch" ]]; then
+    if [[ "$current_arg" == "-suffix" ]]; then
         next_index=$((i + 1))
         if (( next_index > $# )); then
-            echo "\nError: Option -branch requires an argument." >&2
+            echo "\nError: Option -suffix requires an argument." >&2
             print_help
             exit 1
         fi
 
         next_arg="${@[next_index]}"
         if [[ "$next_arg" == -* ]]; then
-            echo "\nError: Option -branch requires a non-option argument." >&2
+            echo "\nError: Option -suffix requires a non-option argument." >&2
             print_help
             exit 1
         fi
@@ -322,28 +340,56 @@ for (( i=1; i<=$#; i++ )); do
     processed_args+=("$current_arg")
 done
 
+normalized_args=()
+for (( i=1; i<=${#processed_args[@]}; i++ )); do
+    current_arg="${processed_args[$i]}"
+
+    if [[ "$current_arg" == "--all" ]]; then
+        FORCE_ALL=1
+        continue
+    fi
+
+    if [[ "$current_arg" == "-0" || "$current_arg" == "-n" || "$current_arg" == "-a" ]]; then
+        normalized_args+=("$current_arg")
+
+        next_index=$((i + 1))
+        if (( next_index <= ${#processed_args[@]} )); then
+            next_arg="${processed_args[$next_index]}"
+            if [[ "$next_arg" == "min" || "$next_arg" == "all" || "$next_arg" == "max" ]]; then
+                if [[ "$next_arg" == "all" || "$next_arg" == "max" ]]; then
+                    FORCE_ALL=1
+                fi
+                i=$next_index
+            fi
+        fi
+        continue
+    fi
+
+    normalized_args+=("$current_arg")
+done
+
 if [[ -n "$SUFFIX" ]]; then
-    for arg in "${processed_args[@]}"; do
+    for arg in "${normalized_args[@]}"; do
         if [[ "$arg" == "-a" ]]; then
-            echo "\nError: -branch cannot be used with -a." >&2
+            echo "\nError: -suffix cannot be used with -a." >&2
             print_help
             exit 1
         fi
     done
 fi
 
-while getopts ":lDd:o21h0:n:a:" argument "${processed_args[@]}"; do
+while getopts ":lDd:o21h0na" argument "${normalized_args[@]}"; do
     case "$argument" in
             h) print_help; exit;;
             D) DEBUG_ENABLED=1;;
             l) list_devices; exit;;
             d) delete_devices $OPTARG;;
-            a) create_devices $argument $OPTARG; exit;;
+            a) create_devices $argument; exit;;
             o) create_devices $argument;;
             2) create_devices $argument;;
             1) create_devices $argument;;
-            0) create_devices $argument $OPTARG;;
-            n) create_devices $argument $OPTARG;;
+            0) create_devices $argument;;
+            n) create_devices $argument;;
             :) echo "\nError: Option -$OPTARG requires an argument." >&2; print_help; exit 1;;
             ?) echo "\nError: unrecognised argument: -$OPTARG"; print_help; exit 1;;
             *) echo "WTF";;
