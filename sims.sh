@@ -1,7 +1,6 @@
 #!/bin/zsh
 
 iPhoneOldest="iPhone 13 Pro"
-iPhonePreviousPrevious="iPhone 14 Pro"
 iPhonePrevious="iPhone 16 Pro"
 iPhoneCurrent="iPhone 17 Pro"
 iPhoneNext="iPhone 18 Pro"
@@ -12,7 +11,6 @@ iPhoneCurrentLargest="iPhone 17 Pro Max"
 iPhoneNextLargest="iPhone 18 Pro Max"
 
 iPadOldest="iPad Air (5th generation)"
-iPadPreviousPrevious="iPad Air 11-inch (M3)"
 iPadPrevious="iPad Air 11-inch (M3)"
 iPadMiniCurrent="iPad mini (A17 Pro)"
 iPadCurrent="iPad Air 11-inch (M3)"
@@ -33,10 +31,11 @@ currentRuntime="$(runtimeString $currentOS)"
 nextRuntime="$(runtimeString $nextOS)"
 
 oldestDevices=( $iPhoneOldest $iPadOldest )
-previousPreviousDevices=( $iPhonePreviousPrevious $iPadPreviousPrevious )
 previousDevices=( $iPhonePrevious $iPadPrevious )
 currentDevices=( $iPhoneCurrent $iPhoneCurrentLargest $iPadMiniCurrent $iPadCurrent $iPadCurrentLargest )
 currentMinimumDevices=( $iPhoneCurrent $iPadCurrent )
+# currentMinimumDevices=( $iPhoneCurrent )
+# currentMinimumDevices=( $iPadCurrent )
 nextDevices=( $iPhoneNext $iPhoneNextLargest $iPadNext $iPadNextLargest )
 nextMinimumDevices=( $iPhoneNext $iPadNext )
 allMinimumDevices=($oldestDevices $previousDevices $currentMinimumDevices $nextMinimumDevices)
@@ -108,7 +107,7 @@ delete_newest_devices() {
         fi
 
         debug_print "$nextRuntime"
-        xcrun simctl list devices "$device" | grep -F "$matched_device_name" | grep -oE '[A-F0-9]{8}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{12}' | while IFS= read -r udid; do
+        xcrun simctl list devices "$device" | grep -F "$matched_device_name (" | grep -oE '[A-F0-9]{8}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{12}' | while IFS= read -r udid; do
             debug_print "Deleting '$matched_device_name' with udid '$udid'"
             xcrun simctl delete "$udid"
         done
@@ -125,7 +124,7 @@ delete_current_devices() {
         fi
 
         debug_print "$currentRuntime"
-        xcrun simctl list devices "$device" | grep -F "$matched_device_name" | grep -oE '[A-F0-9]{8}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{12}' | while IFS= read -r udid; do
+        xcrun simctl list devices "$device" | grep -F "$matched_device_name (" | grep -oE '[A-F0-9]{8}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{12}' | while IFS= read -r udid; do
             debug_print "Deleting '$matched_device_name' with udid '$udid'"
             xcrun simctl delete "$udid"
         done
@@ -137,18 +136,6 @@ delete_previous_devices() {
 
     for device in "${previousDevices[@]}"; do
         debug_print "$previousRuntime"
-        xcrun simctl list devices "$device" | grep -F "$device" | grep -oE '[A-F0-9]{8}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{12}' | while IFS= read -r udid; do
-            debug_print "Deleting '$device' with udid '$udid'"
-            xcrun simctl delete "$udid"
-        done
-    done
-}
-
-delete_previous_previous_devices() {
-    debug_print $0
-
-    for device in "${previousPreviousDevices[@]}"; do
-        debug_print "$previousPreviousRuntime"
         xcrun simctl list devices "$device" | grep -F "$device" | grep -oE '[A-F0-9]{8}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{12}' | while IFS= read -r udid; do
             debug_print "Deleting '$device' with udid '$udid'"
             xcrun simctl delete "$udid"
@@ -176,10 +163,10 @@ delete_all_devices() {
         return
     fi
 
-    local devices_for_all=("${oldestDevices[@]}" "${previousPreviousDevices[@]}" "${previousDevices[@]}" "${currentDevices[@]}" "${nextDevices[@]}")
+    local devices_for_all=("${oldestDevices[@]}" "${previousDevices[@]}" "${currentDevices[@]}" "${nextDevices[@]}")
     for device in "${devices_for_all[@]}"; do
         local matched_device_name="$device - $SUFFIX"
-        xcrun simctl list devices "$device" | grep -F "$matched_device_name" | grep -oE '[A-F0-9]{8}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{12}' | while IFS= read -r udid; do
+        xcrun simctl list devices "$device" | grep -F "$matched_device_name (" | grep -oE '[A-F0-9]{8}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{12}' | while IFS= read -r udid; do
             debug_print "Deleting '$matched_device_name' with udid '$udid'"
             xcrun simctl delete "$udid"
         done
@@ -191,11 +178,10 @@ delete_devices() {
 
     case $1 in
         n) delete_newest_devices;;
-        0) delete_current_devices;;
-        -1) delete_previous_devices;;
-        -2) delete_previous_previous_devices;;
+        c) delete_current_devices;;
+        p) delete_previous_devices;;
         o) delete_oldest_devices;;
-        all) delete_all_devices;;
+        all|--all) delete_all_devices;;
         *) echo "$1 unrecognised"; exit 1;;
     esac
 }
@@ -204,12 +190,6 @@ create_oldest_devices() {
     debug_print $0
 
     create_device "${oldestDevices[@]}" "$oldestRuntime"
-}
-
-create_previous_previous_devices() {
-    debug_print $0
-
-    create_device "${previousPreviousDevices[@]}" "$previousPreviousRuntime"
 }
 
 create_previous_devices() {
@@ -249,11 +229,9 @@ create_devices() {
 
     case $1 in
         o) create_oldest_devices;;
-        2) create_previous_previous_devices;;
-        1) create_previous_devices;;
-        0) create_current_devices $scope;;
+        p) create_previous_devices;;
+        c) create_current_devices $scope;;
         n) create_next_devices $scope;;
-        a) create_oldest_devices; create_previous_previous_devices; create_previous_devices; create_current_devices $scope; create_next_devices $scope;;
         *) echo "$1 unrecognised"; exit 1;;
     esac
 }
@@ -261,7 +239,7 @@ create_devices() {
 list_devices() {
     debug_print $0
 
-    xcrun simctl list devices
+    xcrun simctl list devices available
 }
 
 announce_completion() {
@@ -273,28 +251,90 @@ announce_completion() {
 print_help() {
     debug_print $0
 
-    local allSupportedOSVersions=($oldestOS $previousOS $currentOS $nextOS)
-
-    echo "\nUsage: sims.sh [[-o] [-2] [-1] [-0] [-n] | [-a]] [--all]"
-    echo "\nSet \$PROXYING_CERTIFICATE to the location of the proxy root certificate if you want to automatically install one to each simulator"
+    echo "\nUsage: sims.sh [-v] (-h | -l | ((-c|-d) [o|p|c|n] [--all|--min] [--suffix <suffix>]))"
+    echo          
+    echo "Commands"          
+    echo "  -h                  Show this help message and exit"
+    echo "  -l                  List devices"
+    echo "  -c                  Create devices"
+    echo "  -d                  Delete devices"
+    echo          
+    echo "Selectors"          
+    echo "  n                   Use newest runtime (iOS $nextOS)"
+    echo "  c                   Use current runtime (iOS $currentOS)"
+    echo "  p                   Use previous runtime (iOS $previousOS)"
+    echo "  o                   Use oldest runtime (iOS $oldestOS)"
+    echo          
+    echo "Scope"          
+    echo "  --all               Create/delete all simulators for the chosen set"
+    echo "  --min               Create/delete only simulators for the minimum set"
     echo
-    echo "Options:"
-    echo   "  -h        Show this help message and exit"
-    echo   "  -l        List devices"
-    echo   "  -D        Enable debug messages"
-    printf "  -d n      Deletes $nextOS devices: %s\n" "${(j/, /)nextDevices}"
-    printf "  -d 0      Deletes $currentOS devices: %s\n" "${(j/, /)currentDevices}"
-    printf "  -d -1     Deletes $previousOS devices: %s\n" "${(j/, /)previousDevices}"
-    printf "  -d -2     Deletes $previousPreviousOS devices: %s\n" "${(j/, /)previousPreviousDevices}"
-    printf "  -d o     Deletes $oldestOS devices: %s\n" "${(j/, /)oldestDevices}"
-    echo   "  -d all    Deletes all devices (or only suffix-suffixed devices with -suffix)"
-    printf "  -o        Installs $oldestOS on %s\n" "${(j/, /)oldestDevices}"
-    printf "  -1        Installs $previousOS on %s\n" "${(j/, /)previousDevices}"
-    printf "  -0        Installs $currentOS minimum on %s\n" "${(j/, /)currentMinimumDevices}"
-    printf "  -n        Installs $nextOS minimum on %s\n" "${(j/, /)nextMinimumDevices}"
-    printf "  -a        Installs %s on minimum set %s\n" "${(j/, /)allSupportedOSVersions}" "${(j/, /)allMinimumDevices}"
-    echo   "  --all     For -0, -n, and -a, install full device sets (same behavior as old 'all'/'max' arguments)"
-    echo   "  -suffix s Appends ' - s' to created simulator names (not supported with -a)"
+    echo "Other Options"          
+    echo "  -v                  Enable verbose mode"
+    echo "  --suffix <suffix>   Append <suffix> to created simulator names"
+    echo
+    echo "Set \$PROXYING_CERTIFICATE to the location of the proxy root certificate to auto-install it in each created simulator."
+    echo
+    echo "Usage Summary"
+    echo
+    local selector_header="Selector"
+    local scope_header="Scope"
+    local runtime_header="Runtime"
+    local devices_header="Devices"
+
+    local -a summary_rows
+    summary_rows=(
+        "o|min|iOS $oldestOS|${(j/, /)oldestDevices}"
+        "o|all|iOS $oldestOS|${(j/, /)oldestDevices}"
+        "p|min|iOS $previousOS|${(j/, /)previousDevices}"
+        "p|all|iOS $previousOS|${(j/, /)previousDevices}"
+        "c|min|iOS $currentOS|${(j/, /)currentMinimumDevices}"
+        "c|all|iOS $currentOS|${(j/, /)currentDevices}"
+        "n|min|iOS $nextOS|${(j/, /)nextMinimumDevices}"
+        "n|all|iOS $nextOS|${(j/, /)nextDevices}"
+    )
+
+    local selector_width=${#selector_header}
+    local scope_width=${#scope_header}
+    local runtime_width=${#runtime_header}
+    local devices_width=${#devices_header}
+
+    local row selector scope runtime devices rest
+    for row in "${summary_rows[@]}"; do
+        selector="${row%%|*}"
+        rest="${row#*|}"
+        scope="${rest%%|*}"
+        rest="${rest#*|}"
+        runtime="${rest%%|*}"
+        devices="${rest#*|}"
+
+        (( ${#selector} > selector_width )) && selector_width=${#selector}
+        (( ${#scope} > scope_width )) && scope_width=${#scope}
+        (( ${#runtime} > runtime_width )) && runtime_width=${#runtime}
+        (( ${#devices} > devices_width )) && devices_width=${#devices}
+    done
+
+    local selector_rule="$(printf '%*s' "$selector_width" '' | tr ' ' '-')"
+    local scope_rule="$(printf '%*s' "$scope_width" '' | tr ' ' '-')"
+    local runtime_rule="$(printf '%*s' "$runtime_width" '' | tr ' ' '-')"
+    local devices_rule="$(printf '%*s' "$devices_width" '' | tr ' ' '-')"
+
+    echo "+-${selector_rule}-+-${scope_rule}-+-${runtime_rule}-+-${devices_rule}-+"
+    printf "| %-*s | %-*s | %-*s | %-*s |\n" "$selector_width" "$selector_header" "$scope_width" "$scope_header" "$runtime_width" "$runtime_header" "$devices_width" "$devices_header"
+    echo "+-${selector_rule}-+-${scope_rule}-+-${runtime_rule}-+-${devices_rule}-+"
+
+    for row in "${summary_rows[@]}"; do
+        selector="${row%%|*}"
+        rest="${row#*|}"
+        scope="${rest%%|*}"
+        rest="${rest#*|}"
+        runtime="${rest%%|*}"
+        devices="${rest#*|}"
+
+        printf "| %-*s | %-*s | %-*s | %-*s |\n" "$selector_width" "$selector" "$scope_width" "$scope" "$runtime_width" "$runtime" "$devices_width" "$devices"
+    done
+
+    echo "+-${selector_rule}-+-${scope_rule}-+-${runtime_rule}-+-${devices_rule}-+"
 }
 
 print_help_if_no_arguments() {
@@ -313,21 +353,37 @@ print_help_if_no_arguments() {
 
 print_help_if_no_arguments $1
 
+list_requested=0
+for arg in "$@"; do
+    if [[ "$arg" == "-v" ]]; then
+        DEBUG_ENABLED=1
+    fi
+
+    if [[ "$arg" == "-l" ]]; then
+        list_requested=1
+    fi
+done
+
+if (( list_requested == 1 )); then
+    list_devices
+    exit 0
+fi
+
 processed_args=()
 for (( i=1; i<=$#; i++ )); do
     current_arg="${@[i]}"
 
-    if [[ "$current_arg" == "-suffix" ]]; then
+    if [[ "$current_arg" == "--suffix" ]]; then
         next_index=$((i + 1))
         if (( next_index > $# )); then
-            echo "\nError: Option -suffix requires an argument." >&2
+            echo "\nError: Option --suffix requires an argument." >&2
             print_help
             exit 1
         fi
 
         next_arg="${@[next_index]}"
         if [[ "$next_arg" == -* ]]; then
-            echo "\nError: Option -suffix requires a non-option argument." >&2
+            echo "\nError: Option --suffix requires a non-option argument." >&2
             print_help
             exit 1
         fi
@@ -344,52 +400,77 @@ normalized_args=()
 for (( i=1; i<=${#processed_args[@]}; i++ )); do
     current_arg="${processed_args[$i]}"
 
+    if [[ "$current_arg" == "-d" ]]; then
+        normalized_args+=("$current_arg")
+        next_index=$((i + 1))
+        if (( next_index <= ${#processed_args[@]} )); then
+            next_arg="${processed_args[$next_index]}"
+            if [[ "$next_arg" == "c" || "$next_arg" == "p" || "$next_arg" == "n" || "$next_arg" == "o" || "$next_arg" == "--all" ]]; then
+                normalized_args+=("$next_arg")
+                i=$next_index
+            else
+                echo "\nError: -d requires a selector [o|p|c|n] or --all." >&2
+                print_help
+                exit 1
+            fi
+        else
+            echo "\nError: -d requires a selector [o|p|c|n] or --all." >&2
+            print_help
+            exit 1
+        fi
+        continue
+    fi
+
+    if [[ "$current_arg" == "-c" ]]; then
+        normalized_args+=("$current_arg")
+        next_index=$((i + 1))
+        if (( next_index <= ${#processed_args[@]} )); then
+            next_arg="${processed_args[$next_index]}"
+            if [[ "$next_arg" == "c" || "$next_arg" == "p" || "$next_arg" == "n" || "$next_arg" == "o" ]]; then
+                normalized_args+=("$next_arg")
+                i=$next_index
+            else
+                normalized_args+=("c")
+            fi
+        else
+            normalized_args+=("c")
+        fi
+        continue
+    fi
+
     if [[ "$current_arg" == "--all" ]]; then
         FORCE_ALL=1
         continue
     fi
 
-    if [[ "$current_arg" == "-0" || "$current_arg" == "-n" || "$current_arg" == "-a" ]]; then
-        normalized_args+=("$current_arg")
-
-        next_index=$((i + 1))
-        if (( next_index <= ${#processed_args[@]} )); then
-            next_arg="${processed_args[$next_index]}"
-            if [[ "$next_arg" == "min" || "$next_arg" == "all" || "$next_arg" == "max" ]]; then
-                if [[ "$next_arg" == "all" || "$next_arg" == "max" ]]; then
-                    FORCE_ALL=1
-                fi
-                i=$next_index
-            fi
-        fi
+    if [[ "$current_arg" == "--min" ]]; then
+        FORCE_ALL=0
         continue
     fi
 
     normalized_args+=("$current_arg")
 done
 
-if [[ -n "$SUFFIX" ]]; then
-    for arg in "${normalized_args[@]}"; do
-        if [[ "$arg" == "-a" ]]; then
-            echo "\nError: -suffix cannot be used with -a." >&2
-            print_help
-            exit 1
-        fi
-    done
+command_count=0
+for arg in "${normalized_args[@]}"; do
+    if [[ "$arg" == "-c" || "$arg" == "-d" ]]; then
+        command_count=$((command_count + 1))
+    fi
+done
+
+if (( command_count > 1 )); then
+    echo "\nError: choose exactly one command: -c or -d." >&2
+    print_help
+    exit 1
 fi
 
-while getopts ":lDd:o21h0na" argument "${normalized_args[@]}"; do
+while getopts ":hvlc:d:" argument "${normalized_args[@]}"; do
     case "$argument" in
             h) print_help; exit;;
-            D) DEBUG_ENABLED=1;;
+            v) DEBUG_ENABLED=1;;
             l) list_devices; exit;;
             d) delete_devices $OPTARG;;
-            a) create_devices $argument; exit;;
-            o) create_devices $argument;;
-            2) create_devices $argument;;
-            1) create_devices $argument;;
-            0) create_devices $argument;;
-            n) create_devices $argument;;
+            c) create_devices $OPTARG;;
             :) echo "\nError: Option -$OPTARG requires an argument." >&2; print_help; exit 1;;
             ?) echo "\nError: unrecognised argument: -$OPTARG"; print_help; exit 1;;
             *) echo "WTF";;
