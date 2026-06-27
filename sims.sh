@@ -1,5 +1,9 @@
 #!/bin/zsh
 
+# Reset all shell options to zsh defaults, preventing inherited tracing (xtrace,
+# verbose, etc.) from leaking in from the calling shell.
+emulate -LR zsh
+
 iPhoneOldest="iPhone 13 Pro"
 iPhonePrevious="iPhone 16 Pro"
 iPhoneCurrent="iPhone 17 Pro"
@@ -20,7 +24,7 @@ iPadNextLargest="iPad Air 13-inch (M3)"
 
 oldestOS="17.5"
 previousOS="18.6"
-currentOS="26.2"
+currentOS="26.5"
 nextOS="27.0"
 
 runtimeString() { echo "com.apple.CoreSimulator.SimRuntime.iOS-${1//./-}"; }
@@ -101,33 +105,48 @@ delete_newest_devices() {
     debug_print $0
 
     for device in "${nextDevices[@]}"; do
-        local matched_device_name="$device"
-        if [[ -n "$SUFFIX" ]]; then
-            matched_device_name="$device - $SUFFIX"
-        fi
-
-        debug_print "$nextRuntime"
-        xcrun simctl list devices "$device" | grep -F "$matched_device_name (" | grep -oE '[A-F0-9]{8}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{12}' | while IFS= read -r udid; do
-            debug_print "Deleting '$matched_device_name' with udid '$udid'"
-            xcrun simctl delete "$udid"
-        done
+        delete_matching_device "$device"
     done
+}
+
+delete_name_matches() {
+    local base_device_name="$1"
+    local candidate_device_name="$2"
+
+    if [[ -z "$SUFFIX" ]]; then
+        [[ "$candidate_device_name" == "$base_device_name" ]]
+        return
+    fi
+
+    local prefix="$base_device_name - "
+    [[ "$candidate_device_name" == "$prefix"* ]] || return 1
+
+    local candidate_suffix="${candidate_device_name#$prefix}"
+    [[ "$candidate_suffix" == ${~SUFFIX} ]]
+}
+
+delete_matching_device() {
+    local base_device_name="$1"
+    local udid candidate_device_name line
+
+    while IFS= read -r line; do
+        udid="$(print -r -- "$line" | grep -oE '[A-F0-9]{8}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{12}')"
+        [[ -z "$udid" ]] && continue
+
+        candidate_device_name="$(print -r -- "$line" | sed -E 's/^[[:space:]]*//; s/ \([A-F0-9-]{36}\).*//')"
+
+        if delete_name_matches "$base_device_name" "$candidate_device_name"; then
+            echo "Deleting '$candidate_device_name' ($udid)" >&2
+            xcrun simctl delete "$udid"
+        fi
+    done < <(xcrun simctl list devices "$base_device_name")
 }
 
 delete_current_devices() {
     debug_print $0
 
     for device in "${currentDevices[@]}"; do
-        local matched_device_name="$device"
-        if [[ -n "$SUFFIX" ]]; then
-            matched_device_name="$device - $SUFFIX"
-        fi
-
-        debug_print "$currentRuntime"
-        xcrun simctl list devices "$device" | grep -F "$matched_device_name (" | grep -oE '[A-F0-9]{8}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{12}' | while IFS= read -r udid; do
-            debug_print "Deleting '$matched_device_name' with udid '$udid'"
-            xcrun simctl delete "$udid"
-        done
+        delete_matching_device "$device"
     done
 }
 
@@ -135,11 +154,7 @@ delete_previous_devices() {
     debug_print $0
 
     for device in "${previousDevices[@]}"; do
-        debug_print "$previousRuntime"
-        xcrun simctl list devices "$device" | grep -F "$device" | grep -oE '[A-F0-9]{8}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{12}' | while IFS= read -r udid; do
-            debug_print "Deleting '$device' with udid '$udid'"
-            xcrun simctl delete "$udid"
-        done
+        delete_matching_device "$device"
     done
 }
 
@@ -147,11 +162,7 @@ delete_oldest_devices() {
     debug_print $0
 
     for device in "${oldestDevices[@]}"; do
-        debug_print "$oldestRuntime"
-        xcrun simctl list devices "$device" | grep -F "$device" | grep -oE '[A-F0-9]{8}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{12}' | while IFS= read -r udid; do
-            debug_print "Deleting '$device' with udid '$udid'"
-            xcrun simctl delete "$udid"
-        done
+        delete_matching_device "$device"
     done
 }
 
@@ -165,11 +176,7 @@ delete_all_devices() {
 
     local devices_for_all=("${oldestDevices[@]}" "${previousDevices[@]}" "${currentDevices[@]}" "${nextDevices[@]}")
     for device in "${devices_for_all[@]}"; do
-        local matched_device_name="$device - $SUFFIX"
-        xcrun simctl list devices "$device" | grep -F "$matched_device_name (" | grep -oE '[A-F0-9]{8}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{12}' | while IFS= read -r udid; do
-            debug_print "Deleting '$matched_device_name' with udid '$udid'"
-            xcrun simctl delete "$udid"
-        done
+        delete_matching_device "$device"
     done
 }
 
@@ -218,6 +225,76 @@ create_next_devices() {
     fi
 }
 
+copy_image() {
+    debug_print $0
+
+    local image_path="$1"
+    local selector="$2"
+    local devices=()
+
+    case "$selector" in
+        o) devices=("${oldestDevices[@]}");;
+        p) devices=("${previousDevices[@]}");;
+        c) devices=("${currentDevices[@]}");;
+        n) devices=("${nextDevices[@]}");;
+        *) echo "\nError: $selector unrecognised" >&2; exit 1;;
+    esac
+
+    for device in "${devices[@]}"; do
+        local matched_device_name="$device"
+        if [[ -n "$SUFFIX" ]]; then
+            matched_device_name="$device - $SUFFIX"
+        fi
+
+        debug_print "Copying '$image_path' to '$matched_device_name'"
+        xcrun simctl list devices "$device" | grep -F "$matched_device_name (" | grep -oE '[A-F0-9]{8}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{12}' | while IFS= read -r udid; do
+            debug_print "Copying '$image_path' to '$matched_device_name' with udid '$udid'"
+            xcrun simctl bootstatus "$udid" -b >/dev/null
+            local addmedia_output
+            addmedia_output="$(xcrun simctl addmedia "$udid" "$image_path" 2>&1)"
+            local addmedia_exit_code=$?
+
+            if (( addmedia_exit_code != 0 )); then
+                echo "Error: failed to copy '$image_path' to '$matched_device_name' ($udid)" >&2
+                print -r -- "$addmedia_output" >&2
+            fi
+        done
+    done
+}
+
+list_media() {
+    debug_print $0
+
+    local selector="$1"
+    local devices=()
+
+    case "$selector" in
+        o) devices=("${oldestDevices[@]}");;
+        p) devices=("${previousDevices[@]}");;
+        c) devices=("${currentDevices[@]}");;
+        n) devices=("${nextDevices[@]}");;
+        *) echo "\nError: $selector unrecognised" >&2; exit 1;;
+    esac
+
+    for device in "${devices[@]}"; do
+        local matched_device_name="$device"
+        if [[ -n "$SUFFIX" ]]; then
+            matched_device_name="$device - $SUFFIX"
+        fi
+
+        xcrun simctl list devices "$device" | grep -F "$matched_device_name (" | grep -oE '[A-F0-9]{8}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{12}' | while IFS= read -r udid; do
+            local media_root="$HOME/Library/Developer/CoreSimulator/Devices/$udid/data/Media/DCIM"
+            if [[ ! -d "$media_root" ]]; then
+                continue
+            fi
+
+            find "$media_root" -type f | sort | while IFS= read -r media_file; do
+                print -r -- "$matched_device_name | ${media_file#$media_root/}"
+            done
+        done
+    done
+}
+
 
 create_devices() {
     debug_print $0
@@ -251,11 +328,13 @@ announce_completion() {
 print_help() {
     debug_print $0
 
-    echo "\nUsage: sims.sh [-v] (-h | -l | ((-c|-d) [o|p|c|n] [--all|--min] [--suffix <suffix>]))"
+    echo "\nUsage: sims.sh [-v] (-h | -l | -m [o|p|c|n] | (-i <image> [o|p|c|n] [--suffix <suffix>]) | ((-c|-d) [o|p|c|n] [--all|--min] [--suffix <suffix>]))"
     echo          
     echo "Commands"          
     echo "  -h                  Show this help message and exit"
     echo "  -l                  List devices"
+    echo "  -m [selector]       List media on matching simulators"
+    echo "  -i [o|p|c|n] <image> Copy <image> to existing simulators (defaults to c)"
     echo "  -c                  Create devices"
     echo "  -d                  Delete devices"
     echo          
@@ -271,7 +350,7 @@ print_help() {
     echo
     echo "Other Options"          
     echo "  -v                  Enable verbose mode"
-    echo "  --suffix <suffix>   Append <suffix> to created simulator names"
+    echo "  --suffix <suffix>   Append <suffix> to created names; for delete, supports '*' and '?' wildcard matching"
     echo
     echo "Set \$PROXYING_CERTIFICATE to the location of the proxy root certificate to auto-install it in each created simulator."
     echo
@@ -354,6 +433,7 @@ print_help_if_no_arguments() {
 print_help_if_no_arguments $1
 
 list_requested=0
+media_requested=0
 for arg in "$@"; do
     if [[ "$arg" == "-v" ]]; then
         DEBUG_ENABLED=1
@@ -361,6 +441,10 @@ for arg in "$@"; do
 
     if [[ "$arg" == "-l" ]]; then
         list_requested=1
+    fi
+
+    if [[ "$arg" == "-m" ]]; then
+        media_requested=1
     fi
 done
 
@@ -438,6 +522,23 @@ for (( i=1; i<=${#processed_args[@]}; i++ )); do
         continue
     fi
 
+    if [[ "$current_arg" == "-m" ]]; then
+        normalized_args+=("$current_arg")
+        next_index=$((i + 1))
+        if (( next_index <= ${#processed_args[@]} )); then
+            next_arg="${processed_args[$next_index]}"
+            if [[ "$next_arg" == "c" || "$next_arg" == "p" || "$next_arg" == "n" || "$next_arg" == "o" ]]; then
+                normalized_args+=("$next_arg")
+                i=$next_index
+            else
+                normalized_args+=("c")
+            fi
+        else
+            normalized_args+=("c")
+        fi
+        continue
+    fi
+
     if [[ "$current_arg" == "--all" ]]; then
         FORCE_ALL=1
         continue
@@ -453,28 +554,105 @@ done
 
 command_count=0
 for arg in "${normalized_args[@]}"; do
-    if [[ "$arg" == "-c" || "$arg" == "-d" ]]; then
+    if [[ "$arg" == "-c" || "$arg" == "-d" || "$arg" == "-i" || "$arg" == "-m" ]]; then
         command_count=$((command_count + 1))
     fi
 done
 
 if (( command_count > 1 )); then
-    echo "\nError: choose exactly one command: -c or -d." >&2
+    echo "\nError: choose exactly one command: -c, -d, -i, or -m." >&2
     print_help
     exit 1
 fi
 
-while getopts ":hvlc:d:" argument "${normalized_args[@]}"; do
-    case "$argument" in
-            h) print_help; exit;;
-            v) DEBUG_ENABLED=1;;
-            l) list_devices; exit;;
-            d) delete_devices $OPTARG;;
-            c) create_devices $OPTARG;;
-            :) echo "\nError: Option -$OPTARG requires an argument." >&2; print_help; exit 1;;
-            ?) echo "\nError: unrecognised argument: -$OPTARG"; print_help; exit 1;;
-            *) echo "WTF";;
+index=1
+while (( index <= ${#normalized_args[@]} )); do
+    current_arg="${normalized_args[$index]}"
+
+    case "$current_arg" in
+        -h) print_help; exit;;
+        -v) DEBUG_ENABLED=1;;
+        -l) list_devices; exit;;
+        -d)
+            next_index=$((index + 1))
+            if (( next_index > ${#normalized_args[@]} )); then
+                echo "\nError: Option -d requires an argument." >&2
+                print_help
+                exit 1
+            fi
+
+            delete_devices "${normalized_args[$next_index]}"
+            index=$next_index
+            ;;
+        -c)
+            next_index=$((index + 1))
+            if (( next_index > ${#normalized_args[@]} )); then
+                echo "\nError: Option -c requires an argument." >&2
+                print_help
+                exit 1
+            fi
+
+            create_devices "${normalized_args[$next_index]}"
+            index=$next_index
+            ;;
+        -i)
+            image_index=$((index + 1))
+            if (( image_index > ${#normalized_args[@]} )); then
+                echo "\nError: Option -i requires an image path." >&2
+                print_help
+                exit 1
+            fi
+
+            selector="c"
+            image_path="${normalized_args[$image_index]}"
+
+            if [[ "$image_path" == "o" || "$image_path" == "p" || "$image_path" == "c" || "$image_path" == "n" ]]; then
+                selector="$image_path"
+                image_index=$((index + 2))
+                if (( image_index > ${#normalized_args[@]} )); then
+                    echo "\nError: Option -i requires an image path." >&2
+                    print_help
+                    exit 1
+                fi
+
+                image_path="${normalized_args[$image_index]}"
+            fi
+
+            index=$image_index
+            next_index=$((index + 1))
+            if (( next_index <= ${#normalized_args[@]} )); then
+                next_arg="${normalized_args[$next_index]}"
+                if [[ "$next_arg" == "o" || "$next_arg" == "p" || "$next_arg" == "c" || "$next_arg" == "n" ]]; then
+                    echo "\nError: -i selector must appear before the image path." >&2
+                    print_help
+                    exit 1
+                fi
+            fi
+
+            copy_image "$image_path" "$selector"
+            ;;
+        -m)
+            selector="c"
+            next_index=$((index + 1))
+            if (( next_index <= ${#normalized_args[@]} )); then
+                next_arg="${normalized_args[$next_index]}"
+                if [[ "$next_arg" == "o" || "$next_arg" == "p" || "$next_arg" == "c" || "$next_arg" == "n" ]]; then
+                    selector="$next_arg"
+                    index=$next_index
+                fi
+            fi
+
+            list_media "$selector"
+            exit 0
+            ;;
+        *)
+            echo "\nError: unrecognised argument: $current_arg" >&2
+            print_help
+            exit 1
+            ;;
     esac
+
+    index=$((index + 1))
 done
 
 list_devices
